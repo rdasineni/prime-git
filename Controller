@@ -1,0 +1,40 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.hunt.app.dao.HuntDAO;
+import com.hunt.app.dao.HuntModelDAO;
+import com.hunt.app.dao.HuntDAO;
+import com.hunt.app.dao.HuntModelDAO;
+
+
+
+@RestController
+@RequestMapping("/hunt")
+public class HuntController {
+
+	@Autowired
+	private HuntDAO huntDao;
+	
+	@Autowired
+	private HuntModelDAO huntModelDao;
+
+	@RequestMapping("/hello")
+	public String myData() {
+		return "Hello Spring Boot";
+	}
+	private static Logger logger = LogManager.getLogger(HuntController.class);
+	
+	@GetMapping("/huntclassification")
+	public String mvrClassification() {		
+		return  huntDao.uploadMvrAnalisys();
+		
+	}
+	@GetMapping("/huntmodel")
+	public String mvrClassificationModel() {		
+		return  huntModelDao.buildMvrModel();
+		
+	}
