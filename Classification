@@ -1,1 +1,364 @@
 
+package com.hunt.app.dao;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.sql.Blob;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Random;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Repository;
+
+import com.hunt.app.stopwords.Stopwords;
+
+import weka.classifiers.Evaluation;
+import weka.classifiers.meta.FilteredClassifier;
+import weka.classifiers.trees.RandomForest;
+import weka.core.Attribute;
+import weka.core.DenseInstance;
+import weka.core.FastVector;
+import weka.core.Instances;
+import weka.classifiers.functions.LibSVM;
+import weka.core.converters.ArffLoader.ArffReader;
+import weka.core.tokenizers.NGramTokenizer;
+import weka.filters.unsupervised.attribute.StringToWordVector;
+
+@Repository
+public class HuntModelDAOImpl implements HuntModelDAO {
+	private Connection conn = null;
+	private Statement stmt=null;
+	private ResultSet rs=null;
+	private static Instances trainData = null;
+	StringToWordVector filter=null;
+	private static FilteredClassifier classifier=null;
+	private static Instances instances=null;
+	int id;
+	String dev_point=null;
+	@Autowired
+	private DataSource dataSource;
+	
+	@Value("${hunt.queryforclassNames}")
+	private String qfclassNames;
+	
+	@Value("${hunt.arffFilePath}")
+	private String arffFilePath;
+	
+	@Value("${hunt.deviationQuery}")
+	private String queryForDev;
+	
+	@Value("${hunt.stopwords}")
+	private String stopWords_fileName;
+	
+	@Value("${hunt.model}")
+	private String model_fileName;
+	
+	@Value("${hunt.devpoints}")
+	private String mvr_devPoints;
+	
+	public String buildMvrModel() {
+		try {
+			conn = dataSource.getConnection();
+			String classNames = getClassNamesFromdb();
+			getTraindataFromdb(classNames);
+			loadDataset();
+			evaluate();
+			learn();
+			saveModel();
+			loadModel();
+			getDevationpointFromdb();
+			conn.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+	public String getClassNamesFromdb() {
+		String classNames = "";
+		try {
+			stmt = conn.createStatement();
+			 rs = stmt.executeQuery(qfclassNames);
+			int i=1;
+			while (rs.next()) {
+				classNames = classNames + rs.getString(1) + ",";
+				i++;
+			}
+			rs.close();
+			stmt.close();
+			System.out.println("Tables created successfully ... " + classNames+" "+i);			
+		} catch (Exception e) {
+			e.printStackTrace();			
+		} finally {
+			try {
+				if (stmt != null) {
+					stmt.close();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();				
+			}
+		}
+		return classNames.substring(0, classNames.length() - 1);
+	}
+	public void getTraindataFromdb(String classNames) {
+		File file = new File(arffFilePath);
+		FileWriter fr = null;
+		BufferedWriter br = null;
+		String dataWithNewLine = System.getProperty("line.separator");
+		try {
+			stmt = conn.createStatement();
+			ResultSet rs = stmt.executeQuery(queryForDev);
+			fr = new FileWriter(file);
+			br = new BufferedWriter(fr);
+			br.write("@relation mvrdata");
+			br.newLine();
+			br.newLine();
+			br.write("@attribute mvrclass {" + classNames + "}");
+			br.newLine();
+			br.write("@attribute text String");
+			br.newLine();
+			br.newLine();
+			br.write("@data");
+			br.newLine();
+			int i=1;
+			while (rs.next()) {
+				int id = rs.getInt(1);
+				String className = rs.getString(2);
+				
+				i++;				
+			//	String deviationpoint = rs.getString(2).trim();
+				Blob blob = rs.getBlob(3);
+				byte[] bdata = blob.getBytes(1, (int) blob.length());
+				String deviationpoint = new String(bdata).trim();	
+				
+				if(deviationpoint!=null && !deviationpoint.isEmpty() && deviationpoint.length()>100) {
+				//	System.out.println("---> "+id+" -- "+deviationpoint);
+				deviationpoint = Stopwords.removeNoicedata(deviationpoint);
+				deviationpoint = Stopwords.removeStopWords(deviationpoint, stopWords_fileName);
+				deviationpoint = Stopwords.removeStemmedStopWords(deviationpoint);			
+				br.write(className + ",'" + deviationpoint + "'");
+				br.newLine();
+				}else {
+					System.out.println("--> "+id+" -- "+deviationpoint);
+				}
+			}
+			rs.close();
+			stmt.close();			
+		} catch (Exception e) {
+			e.printStackTrace();			
+		} finally {
+			try {
+				br.close();
+				fr.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			try {
+				if (stmt != null) {
+					stmt.close();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();				
+			}
+		}
+
+	}
+	public void loadDataset() {		
+		try {
+			BufferedReader reader = new BufferedReader(new FileReader(arffFilePath));
+			ArffReader arff = new ArffReader(reader);
+			trainData = arff.getData();
+			System.out.println("===== Loaded dataset: " + arffFilePath + " =====");
+			reader.close();
+		} catch (IOException e) {
+			System.out.println("Problem found when loaddataset: " + arffFilePath);
+		}
+	}
+	public void evaluate() {
+		try {	
+			trainData.setClassIndex(0);
+			NGramTokenizer tokenizer = new NGramTokenizer();
+			tokenizer.setNGramMinSize(1);
+			tokenizer.setNGramMaxSize(3);
+			tokenizer.setDelimiters("\\W");
+			// Set the filter
+			filter = new StringToWordVector();
+			filter.setAttributeIndices("last");
+			// filter.setAttributeIndicesArray(new int[] { 1 });
+			filter.setOutputWordCounts(true);
+			filter.setTokenizer(tokenizer);
+			filter.setWordsToKeep(1000000);
+			filter.setDoNotOperateOnPerClassBasis(true);
+			filter.setLowerCaseTokens(true);
+			filter.setTFTransform(true);
+			filter.setIDFTransform(true);
+			filter.setInputFormat(trainData);
+			classifier = new FilteredClassifier();
+			classifier.setFilter(filter);
+			classifier.setClassifier(new RandomForest());
+			//classifier.setClassifier(new LibSVM());			
+			Evaluation eval = new Evaluation(trainData);
+			eval.crossValidateModel(classifier, trainData, 10, new Random(1));
+			System.out.println(eval.toSummaryString());
+			System.out.println(eval.toClassDetailsString());
+			System.out.println(eval.toMatrixString());
+			System.out.println("===== Evaluating on filtered (training) dataset done =====");
+		} catch (Exception e) {
+			System.out.println("Problem found when evaluating");
+		}
+	}
+	public void learn() {
+		try {			
+			trainData.setClassIndex(0);
+			NGramTokenizer tokenizer = new NGramTokenizer();
+			tokenizer.setNGramMinSize(1);
+			tokenizer.setNGramMaxSize(3);
+			tokenizer.setDelimiters("\\W");
+
+			// Set the filter
+			filter = new StringToWordVector();
+			filter.setAttributeIndices("last");
+			// filter.setAttributeIndicesArray(new int[] { 1 });
+			filter.setOutputWordCounts(true);
+			filter.setTokenizer(tokenizer);
+			filter.setWordsToKeep(1000000);
+			filter.setDoNotOperateOnPerClassBasis(true);
+			filter.setLowerCaseTokens(true);
+			filter.setTFTransform(true);
+			filter.setIDFTransform(true);
+			filter.setInputFormat(trainData);
+			classifier = new FilteredClassifier();
+			classifier.setFilter(filter);
+			classifier.setClassifier(new RandomForest());
+			//classifier.setClassifier(new LibSVM());			
+			classifier.buildClassifier(trainData);
+			System.out.println("===== Training on filtered (training) dataset done =====");
+		} catch (Exception e) {
+			System.out.println("Problem found when training");
+		}
+	}
+	public void saveModel() {
+		try {
+			ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(model_fileName));
+			out.writeObject(classifier);
+			out.close();
+			System.out.println("===== Saved model: " + model_fileName + " =====");
+		} catch (IOException e) {
+			System.out.println("Problem found when writing: " + model_fileName);
+		}
+	}
+	public void getDevationpointFromdb() {		
+		try {			
+			stmt = conn.createStatement();
+			ResultSet rs = stmt.executeQuery(mvr_devPoints);
+			makeInstance();
+			while (rs.next()) {
+				id = rs.getInt(1);
+				//dev_point = rs.getString(2);
+				Blob blob = rs.getBlob(2);
+				byte[] bdata = blob.getBytes(1, (int) blob.length());
+				 dev_point = new String(bdata);
+				dev_point = Stopwords.removeNoicedata(dev_point);
+				dev_point = Stopwords.removeStopWords(dev_point, stopWords_fileName);
+				dev_point = Stopwords.removeStemmedStopWords(dev_point);
+				System.out.println(id + " " + dev_point);
+				//loadModel();
+				makeInstance();
+				classify();
+			}
+			rs.close();
+			stmt.close();
+		} catch (Exception e) {
+			System.out.println("Problem found when reading: " +e);
+		}
+	}
+	public void loadModel() {		
+		try {
+			ObjectInputStream in = new ObjectInputStream(new FileInputStream(model_fileName));
+			Object tmp = in.readObject();
+			classifier = (FilteredClassifier) tmp;
+			in.close();
+			System.out.println("===== Loaded model: " + model_fileName + " =====");
+		} catch (Exception e) {
+			// Given the cast, a ClassNotFoundException must be caught along with the
+			// IOException
+			System.out.println("Problem found when reading: " + model_fileName);
+		}
+	}
+	public void makeInstance() {
+		// Create the attributes, class and text
+		try {
+		FastVector fvNominalVal = new FastVector(4);
+		fvNominalVal.addElement("ClinicalTrials");
+		fvNominalVal.addElement("Variations");
+		fvNominalVal.addElement("MarketAuthorisation");
+		fvNominalVal.addElement("Others");		
+		Attribute attribute1 = new Attribute("class", fvNominalVal);
+		Attribute attribute2 = new Attribute("text", (FastVector) null);
+		// Create list of instances with one element
+		FastVector fvWekaAttributes = new FastVector(2);
+		fvWekaAttributes.addElement(attribute1);
+		fvWekaAttributes.addElement(attribute2);
+		instances = new Instances("Test relation", fvWekaAttributes, 1);
+		// Set class index
+		instances.setClassIndex(0);
+		// Create and add the instance
+		DenseInstance instance = new DenseInstance(2);
+		instance.setValue(attribute2, dev_point);
+		// Another way to do it:
+		// instance.setValue((Attribute)fvWekaAttributes.elementAt(1), text);
+		instances.add(instance);
+		System.out.println("===== Instance created with reference dataset =====");
+		// System.out.println(instances);
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+	public void classify() {
+		try {
+			double pred = classifier.classifyInstance(instances.instance(0));
+			System.out.println("===== Classified instance =====");
+			// System.out.println("Class predicted: " +id+" --- "+text+" --- "+
+			// instances.classAttribute().value((int) pred));
+			String pcName = instances.classAttribute().value((int) pred);
+			updateDevPredictedclass(id, pcName);
+		} catch (Exception e) {
+			System.out.println("Problem found when classifying the text");
+		}
+	}	
+	public void updateDevPredictedclass(int id, String pclassName) {
+		try {
+			stmt = conn.createStatement();
+			System.out.println("Class predicted: " + id + " ---	" + dev_point + " --- " + pclassName);
+			//stmt.executeUpdate("update MVR_CLASSIFIED_DATA set category='" + pclassName + "' where id=" + id);
+			stmt.executeUpdate("update vistaar_classification set svm_category='" + pclassName + "' where id=" + id);
+			conn.setAutoCommit(false);
+			conn.commit();
+			stmt.close();			
+		} catch (Exception e) {
+			e.printStackTrace();			
+		} finally {
+			try {
+				if (stmt != null) {
+					stmt.close();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();				
+			}
+		}
+	}
+
+	
+}
