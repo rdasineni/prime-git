@@ -1,0 +1,29 @@
+package com.hunt.app.common;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+public class CommonUtils {
+
+	public static String getTimeDuration(Date startTime, Date endTime) {
+		long difference = endTime.getTime() - startTime.getTime();
+		System.out.println("difference :: "+difference);
+		long differenceSeconds = difference / 1000 % 60;
+		long differenceMinutes = difference / (60 * 1000) % 60;
+		long differenceHours = difference / (60 * 60 * 1000) % 24;
+		long differenceDays = difference / (24 * 60 * 60 * 1000);
+		long millisec = differenceSeconds * 1000;
+		// System.out.println(differenceDays + " days : " + differenceHours + " hours :
+		// " + differenceMinutes+ " minutes : " + differenceSeconds + " seconds.");
+		String totalTime = differenceDays + " day(s) : " + differenceHours + " hour(s) : " + differenceMinutes
+				+ " minute(s) : " + differenceSeconds + " second(s) :" + millisec + " millisecond(s)";
+		return totalTime;
+	}
+	
+	public static String getDateAndTime() {
+		SimpleDateFormat formatter = new SimpleDateFormat("ddMMyyyyHHmmss");
+		Date date = new Date();
+		return formatter.format(date);
+	}
+}
+
