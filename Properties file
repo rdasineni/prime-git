@@ -1,0 +1,59 @@
+#Server configuration
+server.servlet.context-path=/api
+server.port=8090
+server.error.whitelabel.enabled=true
+
+#Logging
+logging.level.org.springframework.web=error
+logging.level.com.labelai.app=info
+logging.config=classpath:log4j2.xml
+
+# BANNER
+spring.banner.charset=ASCII
+spring.banner.location=classpath:banner.txt
+
+# oracle connection fro classification
+#spring.datasource.url=jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.162)(PORT=1521)))(CONNECT_DATA=(SERVER=DEDICATED)(SID=orcl)))
+#spring.datasource.username=tula_04oct2019
+#spring.datasource.password=tula_04oct2019
+#spring.datasource.driver-class-name=oracle.jdbc.driver.OracleDriver
+
+# oracle connection to build model
+spring.datasource.url=jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.195)(PORT=1521)))(CONNECT_DATA=(SERVER=DEDICATED)(SID=mcoder)))
+spring.datasource.username=vistaar
+spring.datasource.password=vistaar
+spring.datasource.driver-class-name=oracle.jdbc.driver.OracleDriver
+
+## MULTIPART
+# Enable multipart uploads
+spring.servlet.multipart.enabled=true
+
+#Gate-Congifuration
+#gateHome=D:\\Gate-8.6
+gate.gapp.file=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\
+
+hunt.source=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\Source\\
+hunt.target=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\Target\\
+hunt.resource=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\HuntResource\\
+hunt.jape=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\HuntJape\\
+hunt.datastore=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\DataStores\\
+hunt.csvfile1=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\outputfiles\\MonitoringReports
+hunt.csvfile2=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\outputfiles\\DocSymptoms
+hunt.csvfile3=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\outputfiles\\AeSe
+hunt.protocalQuery=select PROTOCOL_ID from PROJECT_DETAILS where PROTOCOL_ID =
+#mvr.devQuery = select id,deviation from MVR_DEVIATIONS_DATA
+hunt.devQuery = select id,text_document from vistaar_classification
+hunt.stopwords = C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\stopwords\\stopwords.txt
+hunt.model = C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\model\\hunttrain_Ran.model
+hunt.sourcefile=C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\Source\\
+hunt.docsQuery=select mvr_id,attachment,protocol_id,created_id,project_id from MVR_ATTACHMENTS where  mvr_id in(201,222)
+#mvr.queryforclassNames= SELECT distinct class_name FROM MVR_TRAINED_DATA where status=0 AND CLASS_NAME IS NOT NULL
+hunt.queryforclassNames= SELECT distinct class_name FROM vistaar_classification where status=0 and class_name in('MarketAuthorisation','Variations','ClinicalTrials','Others')		
+hunt.arffFilePath = C:\\sts-workspace\\Spring-Boof-Config\\Hunt\\arff\\hunttrain_Ran.arff
+#mvr.deviationQuery = select class_Name,trained_data from MVR_TRAINED_DATA where status=0 AND CLASS_NAME IS NOT NULL
+hunt.deviationQuery = select id,class_Name,text_document from vistaar_classification where status=0 and class_name in('MarketAuthorisation','Variations','ClinicalTrials','Others') order by ord_id
+hunt.devpoints = select id,text_document from vistaar_classification where status=9 order by file_name
+  
+
+
+
