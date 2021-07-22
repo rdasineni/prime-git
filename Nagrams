@@ -41,3 +41,37 @@ public void generateTfScores(String dirPath, String countries) throws IOExceptio
 			e.printStackTrace();
 		}
 	}
+	
+	-----------------private void queryToDocument(String query, String dirPath2) {
+		File file = new File(dirPath + "/query.txt");
+		try (FileWriter fileWriter = new FileWriter(file)) {
+			query = query.toLowerCase();
+			if ((query.indexOf("full form") != -1) || (query.indexOf("abbrev") != -1)) {
+				query = query.replaceAll("full form", "");
+				query = Stopwords.removeStopWords(query, stopwords);
+				query = Stopwords.removeNoicedata(query);
+				query = Stopwords.removeStemmedStopWords(query);
+				logger.info("Cleaned query ::  " + query);
+				// commented as per ravi said. Dt:30/09/2019
+				
+				 //StringJoiner words = getAbsandSynonyms(new StringTokenizer(query)); 
+				 //query =words.toString();
+				
+			}
+			// query=query+" "+getClassificationData(new StringTokenizer(query));
+			query = Stopwords.removeStopWords(query, stopwords);
+			query = Stopwords.removeNoicedata(query);
+			query = Stopwords.removeStemmedStopWords(query);
+			StringTokenizer st1 = new StringTokenizer(query);
+			wordCount = st1.countTokens();
+			if (wordCount == 2) {
+				query = query + "abcdxyz";
+			}
+			query = query.trim();
+			fileWriter.write(query);
+			fileWriter.flush();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+	}
