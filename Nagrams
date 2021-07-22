@@ -1,0 +1,43 @@
+public void generateTfScores(String dirPath, String countries) throws IOException {
+		try {
+			wordsList = new ArrayList<>();
+			TextDirectoryLoader loader = new TextDirectoryLoader();
+			loader.setDirectory(new File(dirPath));
+			Instances dataRaw = loader.getDataSet();
+			StringToWordVector filter = new StringToWordVector();
+			filter.setInputFormat(dataRaw);
+			filter.setLowerCaseTokens(true);
+			filter.setMinTermFreq(0);
+			filter.setTFTransform(true);
+			filter.setWordsToKeep(100000);
+			filter.setOutputWordCounts(true);
+			NGramTokenizer tokenizer = new NGramTokenizer();
+			tokenizer.setNGramMinSize(Integer.parseInt(nGramMinSize));
+			tokenizer.setNGramMaxSize(Integer.parseInt(nGramMaxSize));
+			filter.setTokenizer(tokenizer);
+			filter.doNotOperateOnPerClassBasisTipText();
+			Instances dataFiltered = Filter.useFilter(dataRaw, filter);
+			/*
+			FileWriter fw = new FileWriter(tfqueryarff);
+			fw.write(dataFiltered.toString());
+			fw.close();
+			*/
+			for (int instIdx = 0; instIdx < dataFiltered.numInstances(); instIdx++) {
+				Instance currInst = dataFiltered.instance(instIdx);
+				for (int attrIdx = 0; attrIdx < dataFiltered.numAttributes(); attrIdx++) {
+					Attribute currAttr = currInst.attribute(attrIdx);
+					if (currAttr.isNominal()) {
+					} else if (currAttr.isNumeric()) {
+						double ss = currInst.value(currAttr.index());
+						String sss = Double.toString(ss);
+						if (!sss.equals("0.0")) {
+							String bag_word = currAttr.name();
+							queryTf.put(bag_word, currInst.value(currAttr.index()));							
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
